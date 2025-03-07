@@ -8,6 +8,10 @@ on:
     branches:
       - dev
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   flake8-lint:
     name: Run Flake8
