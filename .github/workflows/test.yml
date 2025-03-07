@@ -1,4 +1,4 @@
-name: Test and Merge
+name: Test and Auto Merge
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   run-tests:
-    name: Run Tests
+    name: Run Pytest on Test Branch
     runs-on: ubuntu-latest
 
     steps:
@@ -25,36 +25,59 @@ jobs:
           pip install pytest  # Ensure pytest is installed
 
       - name: Run Pytest
-        run: pytest test.py  # Runs test.py with pytest
+        run: pytest test.py  # Runs pytest on test.py
 
-  merge-to-master:
-    name: Merge Test to Master
-    runs-on: ubuntu-latest
+  create-pr:
+    name: Create Pull Request
     needs: run-tests
-    if: success()  # Only proceed if tests pass
+    runs-on: ubuntu-latest
+    if: success()  # Proceed only if tests pass
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Configure Git
+      - name: Create Pull Request if Not Exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          PR_EXISTS=$(gh pr list --base master --head test --json number --jq 'length')
+          if [[ "$PR_EXISTS" -eq 0 ]]; then
+            gh pr create --base master --head test --title "Merge test into master" --body "Auto-generated PR after passing tests."
+          else
+            echo "PR already exists."
+          fi
 
-      - name: Ensure Latest Master
+  merge-pr:
+    name: Merge Pull Request
+    needs: create-pr
+    runs-on: ubuntu-latest
+    if: success()  # Proceed only if PR was successfully created
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Check PR Mergeability and Merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git fetch origin master
-          git checkout master
-          git pull origin master
+          PR_NUMBER=$(gh pr list --base master --head test --json number --jq '.[0].number')
+          if [[ -n "$PR_NUMBER" ]]; then
+            MERGEABLE=$(gh pr view "$PR_NUMBER" --json mergeable --jq '.mergeable')
+            echo "Mergeable status: $MERGEABLE"
+            if [[ "$MERGEABLE" == "MERGEABLE" ]]; then
+              gh pr merge "$PR_NUMBER" --squash --auto
+            else
+              echo "⚠️ Merge conflict detected. Resolving automatically by preferring test branch."
 
-      - name: Merge Test into Master (Resolve Conflicts)
-        run: |
-          git merge --strategy=recursive -X theirs test || (
-            echo "❌ Merge conflict occurred, resolving automatically using 'theirs' strategy."
-            git add .
-            git commit -m "Resolved merge conflicts by preferring incoming changes from test"
-          )
-
-      - name: Push Merged Changes
-        run: git push origin master
+              git config --global user.email "github-actions@github.com"
+              git config --global user.name "GitHub Actions"
+              
+              git checkout master
+              git merge --strategy=recursive -X theirs test
+              git push origin master
+              
+              gh pr close "$PR_NUMBER" --comment "Merged automatically with incoming changes from test."
+            fi
+          fi
