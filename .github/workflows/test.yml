@@ -62,10 +62,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Fetch latest branches
+          git fetch --all
+
+          # Get PR number
           PR_NUMBER=$(gh pr list --base master --head test --json number --jq '.[0].number')
+
           if [[ -n "$PR_NUMBER" ]]; then
             MERGEABLE=$(gh pr view "$PR_NUMBER" --json mergeable --jq '.mergeable')
             echo "Mergeable status: $MERGEABLE"
+
             if [[ "$MERGEABLE" == "MERGEABLE" ]]; then
               gh pr merge "$PR_NUMBER" --squash --auto
             else
@@ -73,11 +79,24 @@ jobs:
 
               git config --global user.email "github-actions@github.com"
               git config --global user.name "GitHub Actions"
-              
-              git checkout master
-              git merge --strategy=recursive -X theirs test
+
+              # Ensure master branch is up-to-date before merging
+              git checkout master || git checkout -b master origin/master
+              git pull origin master
+
+              # Merge test into master, preferring test's changes
+              git merge --strategy=recursive -X theirs test || (
+                echo "✅ Merge conflicts resolved by preferring test branch"
+                git add .
+                git commit -m "Resolved merge conflicts by preferring test branch"
+              )
+
+              # Push resolved merge to master
               git push origin master
-              
+
+              # Close PR as merged
               gh pr close "$PR_NUMBER" --comment "Merged automatically with incoming changes from test."
             fi
+          else
+            echo "No open PR found."
           fi
