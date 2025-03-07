@@ -8,10 +8,6 @@ on:
     branches:
       - dev
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   flake8-lint:
     name: Run Flake8
@@ -32,34 +28,19 @@ jobs:
       - name: Run Flake8 on app.py
         run: flake8 app.py
 
-      - name: Set up GitHub CLI Token
-        run: |
-          echo "GH_TOKEN=${{ secrets.PAT_TOKEN }}" >> $GITHUB_ENV
-          echo "GH_TOKEN set successfully"
-
-      - name: Debug GH_TOKEN
-        run: |
-          if [[ -z "$GH_TOKEN" ]]; then
-            echo "❌ GH_TOKEN is empty!"
-            exit 1
-          else
-            echo "✅ GH_TOKEN is set."
-          fi
-
       - name: Create Pull Request if Flake8 Passes
         if: success()
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_EXISTS=$(gh pr list --base test --head dev --json number --jq 'length')
           if [[ "$PR_EXISTS" -eq 0 ]]; then
             gh pr create --base test --head dev --title "Merge dev into test" --body "Automatically generated PR to merge dev into test after passing Flake8 checks."
           fi
-
       - name: Merge Pull Request
         if: success()
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=$(gh pr list --base test --head dev --json number --jq '.[0].number')
           if [[ -n "$PR_NUMBER" ]]; then
