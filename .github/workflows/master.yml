@@ -1,0 +1,17 @@
+name: Trigger Jenkins on Master Change
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  trigger-jenkins:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Jenkins Build via ngrok
+        run: |
+          curl -X POST "https://clkssvv5-8080.inc1.devtunnels.ms/mlops-assignment-1/https://github.com/AhsanNadeem-A1N5/mlops-assignment-1.git" \
+          --user "admin:11ade39efe0a84018b13dadb5dd1751d94" \
+          --data-urlencode "token=11ade39efe0a84018b13dadb5dd1751d94"
