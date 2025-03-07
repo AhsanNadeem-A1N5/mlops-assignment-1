@@ -30,32 +30,20 @@ jobs:
 
       - name: Create Pull Request if Flake8 Passes
         if: success()
-        uses: peter-evans/create-pull-request@v5
-        with:
-          branch: test
-          base: dev
-          title: "Merge dev into test"
-          body: "Automatically generated PR to merge dev into test after passing Flake8 checks."
-          labels: "automated pr"
-
-      - name: Auto-merge PR
-        if: success()
-        uses: dependabot/fetch-metadata@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
+        run: |
+          PR_EXISTS=$(gh pr list --base test --head dev --json number --jq 'length')
+          if [[ "$PR_EXISTS" -eq 0 ]]; then
+            gh pr create --base test --head dev --title "Merge dev into test" --body "Automatically generated PR to merge dev into test after passing Flake8 checks."
+          fi
 
       - name: Merge Pull Request
         if: success()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.pulls.merge({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: (await github.pulls.list({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-                head: 'dev',
-                base: 'test'
-              })).data[0].number,
-              merge_method: 'squash'
-            });
+        env:
+          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
+        run: |
+          PR_NUMBER=$(gh pr list --base test --head dev --json number --jq '.[0].number')
+          if [[ -n "$PR_NUMBER" ]]; then
+            gh pr merge "$PR_NUMBER" --squash --admin
+          fi
