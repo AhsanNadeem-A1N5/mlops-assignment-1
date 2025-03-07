@@ -37,12 +37,20 @@ jobs:
           if [[ "$PR_EXISTS" -eq 0 ]]; then
             gh pr create --base test --head dev --title "Merge dev into test" --body "Automatically generated PR to merge dev into test after passing Flake8 checks."
           fi
-      - name: Merge Pull Request
+      
+      - name: Check PR Mergeability
         if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=$(gh pr list --base test --head dev --json number --jq '.[0].number')
           if [[ -n "$PR_NUMBER" ]]; then
-            gh pr merge "$PR_NUMBER" --squash --admin
+            MERGEABLE=$(gh pr view "$PR_NUMBER" --json mergeable --jq '.mergeable')
+            echo "Mergeable status: $MERGEABLE"
+            if [[ "$MERGEABLE" == "MERGEABLE" ]]; then
+              gh pr merge "$PR_NUMBER" --squash --auto
+            else
+              echo "❌ PR #$PR_NUMBER is not mergeable. Resolve conflicts manually."
+              exit 1
+            fi
           fi
