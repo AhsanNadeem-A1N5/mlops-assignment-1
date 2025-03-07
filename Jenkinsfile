@@ -2,23 +2,21 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "your-dockerhub-username/your-app"
-        IMAGE_TAG = "latest"
-        DOCKER_HUB_CREDENTIALS = "docker-hub-credentials"
-        ADMIN_EMAIL = "admin@example.com"  // Change to your admin email
+        DOCKER_IMAGE = "AhsanNadeem-A1N5/MLOPS-Assignment1"
+        DOCKER_TAG = "latest"
     }
 
     stages {
-        stage('Clone Repository') {
+        stage('Checkout Code') {
             steps {
-                git branch: 'master', url: 'https://github.com/your-username/your-repo.git'
+                git branch: 'master', url: 'https://github.com/AhsanNadeem-A1N5/mlops-assignment-1.git'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                    sh 'docker build -t $DOCKER_IMAGE:$DOCKER_TAG .'
                 }
             }
         }
@@ -26,8 +24,8 @@ pipeline {
         stage('Login to Docker Hub') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
+                    withCredentials([string(credentialsId: 'docker-hub-password', variable: 'DOCKER_PASSWORD')]) {
+                        sh 'echo $DOCKER_PASSWORD | docker login -u your-dockerhub-username --password-stdin'
                     }
                 }
             }
@@ -36,56 +34,32 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 script {
-                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                    sh 'docker push $DOCKER_IMAGE:$DOCKER_TAG'
                 }
             }
         }
 
         stage('Cleanup') {
             steps {
-                sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG}"
+                script {
+                    sh 'docker rmi $DOCKER_IMAGE:$DOCKER_TAG'
+                }
             }
         }
     }
 
     post {
         success {
-            echo "Deployment successful. Sending email notification..."
-
-            emailext (
-                to: "${ADMIN_EMAIL}",
-                subject: "Deployment Successful: ${IMAGE_NAME}:${IMAGE_TAG}",
-                body: """
-                The deployment of the application was successful.
-
-                - Repository: https://github.com/your-username/your-repo
-                - Deployed Image: ${IMAGE_NAME}:${IMAGE_TAG}
-                - Deployment Time: ${new Date()}
-                
-                Jenkins Job: ${env.BUILD_URL}
-                """,
-                attachLog: true
-            )
+            emailext subject: "Docker Image Uploaded Successfully",
+                     body: "The Docker image $DOCKER_IMAGE:$DOCKER_TAG has been successfully pushed to Docker Hub.",
+                     to: "ahsannadeem00321@gmail.com",
+                     from: "jenkins@example.com"
         }
         failure {
-            echo "Deployment failed. Sending failure notification..."
-
-            emailext (
-                to: "${ADMIN_EMAIL}",
-                subject: "Deployment Failed: ${IMAGE_NAME}:${IMAGE_TAG}",
-                body: """
-                The deployment of the application has failed.
-
-                - Repository: https://github.com/your-username/your-repo
-                - Attempted Image: ${IMAGE_NAME}:${IMAGE_TAG}
-                - Failure Time: ${new Date()}
-                
-                Jenkins Job: ${env.BUILD_URL}
-
-                Please check the Jenkins logs for more details.
-                """,
-                attachLog: true
-            )
+            emailext subject: "Docker Build Failed",
+                     body: "The Jenkins pipeline for Docker image build and push has failed.",
+                     to: "ahsannadeem00321@gmail.com",
+                     from: "jenkins@example.com"
         }
     }
 }
