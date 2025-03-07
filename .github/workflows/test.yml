@@ -49,5 +49,11 @@ jobs:
 
       - name: Merge Test into Master (Resolve Conflicts)
         run: |
-          git merge test -X theirs || (echo "❌ Merge conflict occurred, but resolved using 'theirs' strategy." && git commit -am "Resolved conflicts using 'theirs' strategy")
-          git push origin master
+          git merge --strategy=recursive -X theirs test || (
+            echo "❌ Merge conflict occurred, resolving automatically using 'theirs' strategy."
+            git add .
+            git commit -m "Resolved merge conflicts by preferring incoming changes from test"
+          )
+
+      - name: Push Merged Changes
+        run: git push origin master
