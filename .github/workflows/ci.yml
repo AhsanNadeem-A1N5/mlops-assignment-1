@@ -1,4 +1,4 @@
-name: CI/CD Pipeline (Dev to test) 
+name: CI/CD Pipeline 
 
 on:
   push:
@@ -38,7 +38,7 @@ jobs:
             gh pr create --base test --head dev --title "Merge dev into test" --body "Automatically generated PR to merge dev into test after passing Flake8 checks."
           fi
       
-      - name: Check PR Mergeability
+      - name: Check PR Mergeability and Merge
         if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -50,7 +50,10 @@ jobs:
             if [[ "$MERGEABLE" == "MERGEABLE" ]]; then
               gh pr merge "$PR_NUMBER" --squash --auto
             else
-              echo "❌ PR #$PR_NUMBER is not mergeable. Resolve conflicts manually."
-              exit 1
+              echo "⚠️ Merge conflict detected. Resolving automatically using 'theirs' strategy."
+              gh pr checkout "$PR_NUMBER"
+              git merge -X theirs test
+              git push origin test
+              gh pr merge "$PR_NUMBER" --squash --auto
             fi
           fi

@@ -18,7 +18,7 @@ kmeans.fit(X)
 
 @app.route('/')
 def home():
-    return "Welcome to the K-Means Model Training API!- Version 0.2"
+    return "Welcome to the K-Means Model Training API!- Version 0.3"
 
 
 @app.route('/train')
