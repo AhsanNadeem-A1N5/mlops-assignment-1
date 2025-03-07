@@ -5,6 +5,9 @@ on:
     branches:
       - test
 
+permissions:
+  contents: write
+
 jobs:
   run-tests:
     name: Run Tests
@@ -48,12 +51,12 @@ jobs:
           git checkout master
           git pull origin master
 
-      - name: Merge Test into Master (Resolve Conflicts)
+      - name: Merge Test into Master (Keep Master Changes)
         run: |
-          git merge --strategy=recursive -X theirs test || (
-            echo "❌ Merge conflict occurred, resolving automatically using 'theirs' strategy."
+          git merge --strategy=recursive -X ours test || (
+            echo "❌ Merge conflict occurred, resolving automatically using 'ours' strategy (keeping master changes)."
             git add .
-            git commit -m "Resolved merge conflicts by preferring incoming changes from test"
+            git commit -m "Resolved merge conflicts by preferring existing master changes"
           )
 
       - name: Push Merged Changes
