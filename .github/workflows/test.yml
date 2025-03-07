@@ -1,4 +1,4 @@
-name: Test and Merge branches 
+name: Test and Merge
 
 on:
   push:
@@ -36,22 +36,18 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Merge Test into Master
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure Git
         run: |
-          PR_EXISTS=$(gh pr list --base master --head test --json number --jq 'length')
-          if [[ "$PR_EXISTS" -eq 0 ]]; then
-            gh pr create --base master --head test --title "Merge test into master" --body "Automatically merging test into master after successful tests."
-          fi
-          PR_NUMBER=$(gh pr list --base master --head test --json number --jq '.[0].number')
-          if [[ -n "$PR_NUMBER" ]]; then
-            MERGEABLE=$(gh pr view "$PR_NUMBER" --json mergeable --jq '.mergeable')
-            echo "Mergeable status: $MERGEABLE"
-            if [[ "$MERGEABLE" == "MERGEABLE" ]]; then
-              gh pr merge "$PR_NUMBER" --squash --auto
-            else
-              echo "❌ PR #$PR_NUMBER is not mergeable. Resolve conflicts manually."
-              exit 1
-            fi
-          fi
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Ensure Latest Master
+        run: |
+          git fetch origin master
+          git checkout master
+          git pull origin master
+
+      - name: Merge Test into Master (Resolve Conflicts)
+        run: |
+          git merge test -X theirs || (echo "❌ Merge conflict occurred, but resolved using 'theirs' strategy." && git commit -am "Resolved conflicts using 'theirs' strategy")
+          git push origin master
