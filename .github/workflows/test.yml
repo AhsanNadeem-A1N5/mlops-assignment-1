@@ -58,12 +58,12 @@ jobs:
       - name: Check If There Are Changes to Merge
         id: check_changes
         run: |
-          CHANGES=$(git diff --name-only master test | wc -l)
-          if [[ "$CHANGES" -eq 0 ]]; then
-            echo "No changes to merge. Exiting."
+          AHEAD_BY=$(git rev-list --count master..test)
+          if [[ "$AHEAD_BY" -eq 0 ]]; then
+            echo "No new commits to merge. Exiting."
             echo "has_changes=false" >> $GITHUB_ENV
           else
-            echo "Changes detected. Proceeding with merge."
+            echo "New commits found in test branch. Proceeding with merge."
             echo "has_changes=true" >> $GITHUB_ENV
           fi
 
@@ -71,12 +71,16 @@ jobs:
         if: env.has_changes == 'true'
         run: |
           git checkout master
-          git merge --strategy=recursive -X ours test || (
+          git merge --no-ff --strategy=recursive -X ours test || (
             echo "❌ Merge conflict occurred, resolving automatically using 'ours' strategy (keeping master changes)."
             git add .
             git commit -m "Resolved merge conflicts by keeping existing master changes"
           )
 
+      - name: Show Git Log Before Push
+        if: env.has_changes == 'true'
+        run: git log --oneline --graph --decorate --all -n 10
+
       - name: Push Merged Changes
         if: env.has_changes == 'true'
-        run: git push origin master
+        run: git push origin master --force
