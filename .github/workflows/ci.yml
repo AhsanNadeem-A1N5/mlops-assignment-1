@@ -7,6 +7,7 @@ on:
       - test
   push:
     branches:
+      - dev
       - master  # Trigger Jenkins when master is updated
 
 permissions:
