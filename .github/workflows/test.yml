@@ -5,6 +5,10 @@ on:
     branches:
       - test
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   run-tests:
     name: Run Pytest on Test Branch
@@ -22,10 +26,10 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest  # Ensure pytest is installed
+          pip install pytest
 
       - name: Run Pytest
-        run: pytest test.py  # Runs pytest on test.py
+        run: pytest test.py
 
   create-pr:
     name: Create Pull Request
@@ -69,41 +73,48 @@ jobs:
             exit 1
           fi
 
-      - name: Check PR Mergeability and Merge
+      - name: Check PR Mergeability
+        id: check_merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=$(gh pr list --base master --head test --json number --jq '.[0].number')
+          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
 
-          if [[ -n "$PR_NUMBER" ]]; then
-            MERGEABLE=$(gh pr view "$PR_NUMBER" --json mergeable --jq '.mergeable')
-            echo "Mergeable status: $MERGEABLE"
-
-            if [[ "$MERGEABLE" == "MERGEABLE" ]]; then
-              gh pr merge "$PR_NUMBER" --squash --auto
-            else
-              echo "⚠️ Merge conflict detected. Resolving automatically by preferring test branch."
-
-              git config --global user.email "github-actions@github.com"
-              git config --global user.name "GitHub Actions"
-
-              # Ensure master is up-to-date
-              git checkout master || git checkout -b master origin/master
-              git pull origin master
-
-              # Merge test into master, preferring test's changes
-              git merge --strategy=recursive -X theirs test || (
-                echo "✅ Merge conflicts resolved by preferring test branch"
-                git add .
-                git commit -m "Resolved merge conflicts by preferring test branch"
-              )
-
-              # Push resolved merge to master
-              git push origin master
-
-              # Close PR as merged
-              gh pr close "$PR_NUMBER" --comment "Merged automatically with incoming changes from test."
-            fi
-          else
-            echo "No open PR found."
+          if [[ -z "$PR_NUMBER" ]]; then
+            echo "No open PR found. Exiting."
+            exit 1
           fi
+
+          MERGEABLE=$(gh pr view "$PR_NUMBER" --json mergeable --jq '.mergeable')
+          echo "Mergeable status: $MERGEABLE"
+          echo "MERGEABLE=$MERGEABLE" >> $GITHUB_ENV
+
+      - name: Merge PR Automatically
+        if: env.MERGEABLE == 'MERGEABLE'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "$PR_NUMBER" --squash --auto
+
+      - name: Resolve Merge Conflicts and Force Merge
+        if: env.MERGEABLE != 'MERGEABLE'
+        run: |
+          echo "⚠️ Merge conflict detected. Resolving automatically by preferring test branch."
+          
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+          git checkout master || git checkout -b master origin/master
+          git pull origin master
+
+          # Force merge by preferring test's changes
+          git merge --strategy=recursive -X theirs test || (
+            echo "✅ Merge conflicts resolved by preferring test branch."
+            git add .
+            git commit -m "Resolved merge conflicts by preferring test branch."
+          )
+
+          git push origin master --force
+
+          gh pr close "$PR_NUMBER" --comment "Merged automatically by resolving conflicts in favor of test branch."
