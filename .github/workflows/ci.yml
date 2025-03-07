@@ -32,6 +32,9 @@ jobs:
       - name: Run Flake8 on app.py
         run: flake8 app.py
 
+      - name: Set up GitHub CLI
+        run: echo "GH_TOKEN=${{ secrets.PAT_TOKEN }}" >> $GITHUB_ENV
+
       - name: Create Pull Request if Flake8 Passes
         if: success()
         env:
