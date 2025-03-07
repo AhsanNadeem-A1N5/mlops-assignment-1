@@ -25,21 +25,39 @@ jobs:
       - name: Install Flake8
         run: pip install flake8
 
-      - name: Run Flake8 on app.py
+      - name: Run Flake8
         run: flake8 app.py
 
-      - name: Create Pull Request if Flake8 Passes
-        if: success()
+  create-pr:
+    needs: flake8-lint
+    runs-on: ubuntu-latest
+    if: success()  # Only proceed if Flake8 passes
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Pull Request if it doesn't exist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_EXISTS=$(gh pr list --base test --head dev --json number --jq 'length')
           if [[ "$PR_EXISTS" -eq 0 ]]; then
             gh pr create --base test --head dev --title "Merge dev into test" --body "Automatically generated PR to merge dev into test after passing Flake8 checks."
+          else
+            echo "PR already exists."
           fi
-      
+
+  merge-pr:
+    needs: create-pr
+    runs-on: ubuntu-latest
+    if: success()  # Only merge if PR creation succeeded
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Check PR Mergeability and Merge
-        if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -50,10 +68,18 @@ jobs:
             if [[ "$MERGEABLE" == "MERGEABLE" ]]; then
               gh pr merge "$PR_NUMBER" --squash --auto
             else
-              echo "⚠️ Merge conflict detected. Resolving automatically using 'theirs' strategy."
-              gh pr checkout "$PR_NUMBER"
-              git merge -X theirs test
+              echo "⚠️ Merge conflict detected. Resolving automatically by preferring incoming changes (dev)."
+
+              # Checkout the test branch and merge with --strategy-option=theirs (preferring incoming changes)
+              git config --global user.email "github-actions@github.com"
+              git config --global user.name "GitHub Actions"
+              git checkout test
+              git merge --strategy=recursive -X theirs dev
+
+              # Push the resolved merge back to test
               git push origin test
-              gh pr merge "$PR_NUMBER" --squash --auto
+              
+              # Mark the PR as merged
+              gh pr close "$PR_NUMBER" --comment "Merged automatically with incoming changes from dev."
             fi
           fi
