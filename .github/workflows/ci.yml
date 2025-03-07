@@ -31,7 +31,7 @@ jobs:
       - name: Create Pull Request if Flake8 Passes
         if: success()
         env:
-          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_EXISTS=$(gh pr list --base test --head dev --json number --jq 'length')
           if [[ "$PR_EXISTS" -eq 0 ]]; then
@@ -41,7 +41,7 @@ jobs:
       - name: Merge Pull Request
         if: success()
         env:
-          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=$(gh pr list --base test --head dev --json number --jq '.[0].number')
           if [[ -n "$PR_NUMBER" ]]; then
