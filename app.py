@@ -9,7 +9,7 @@ app = Flask(__name__)
 iris = load_iris()
 X = iris.data  # Feature matrix
 y = iris.target  # Target labels
-target_names = iris.target_names  # ['setosa', 'versicolor', 'virginica']
+target_names = iris.target_names
 
 # Train a K-Means model
 kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
