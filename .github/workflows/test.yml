@@ -31,7 +31,7 @@ jobs:
     name: Create Pull Request
     needs: run-tests
     runs-on: ubuntu-latest
-    if: success()  # Proceed only if tests pass
+    if: success()
 
     steps:
       - name: Checkout Repository
@@ -52,20 +52,27 @@ jobs:
     name: Merge Pull Request
     needs: create-pr
     runs-on: ubuntu-latest
-    if: success()  # Proceed only if PR was successfully created
+    if: success()
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Ensure Test Branch Exists and Fetch Latest Changes
+        run: |
+          git fetch --all
+          if git show-ref --verify --quiet refs/remotes/origin/test; then
+            git checkout test
+            git pull origin test
+          else
+            echo "❌ Test branch not found. Exiting."
+            exit 1
+          fi
+
       - name: Check PR Mergeability and Merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Fetch latest branches
-          git fetch --all
-
-          # Get PR number
           PR_NUMBER=$(gh pr list --base master --head test --json number --jq '.[0].number')
 
           if [[ -n "$PR_NUMBER" ]]; then
@@ -80,7 +87,7 @@ jobs:
               git config --global user.email "github-actions@github.com"
               git config --global user.name "GitHub Actions"
 
-              # Ensure master branch is up-to-date before merging
+              # Ensure master is up-to-date
               git checkout master || git checkout -b master origin/master
               git pull origin master
 
