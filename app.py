@@ -15,14 +15,18 @@ target_names = iris.target_names  # ['setosa', 'versicolor', 'virginica']
 kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
 kmeans.fit(X)
 
+
 @app.route('/')
 def home():
     return "Welcome to the K-Means Model Training API!"
 
+
 @app.route('/train')
 def train_model():
     cluster_centers = kmeans.cluster_centers_.tolist()
-    return jsonify({"message": "Model trained successfully!", "cluster_centers": cluster_centers})
+    return jsonify({"message": "Model trained successfully!",
+                    "cluster_centers": cluster_centers})
+
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -30,7 +34,10 @@ def predict():
     iris_type = data.get("type", "").lower()
 
     if iris_type not in target_names:
-        return jsonify({"error": "Invalid type. Choose from setosa, versicolor, or virginica."}), 400
+        return jsonify({
+            "error":
+            "Invalid type. Choose from setosa, versicolor, or virginica."
+            }), 400
 
     # Get the average feature values for the selected species
     species_index = list(target_names).index(iris_type)
@@ -46,6 +53,7 @@ def predict():
         }
     }
     return jsonify(response)
+
 
 if __name__ == '__main__':
     app.run(debug=True)

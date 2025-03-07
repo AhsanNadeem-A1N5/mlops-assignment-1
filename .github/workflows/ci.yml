@@ -20,10 +20,42 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.x'
 
       - name: Install Flake8
         run: pip install flake8
 
       - name: Run Flake8 on app.py
         run: flake8 app.py
+
+      - name: Create Pull Request if Flake8 Passes
+        if: success()
+        uses: peter-evans/create-pull-request@v5
+        with:
+          branch: test
+          base: dev
+          title: "Merge dev into test"
+          body: "Automatically generated PR to merge dev into test after passing Flake8 checks."
+          labels: "automated pr"
+
+      - name: Auto-merge PR
+        if: success()
+        uses: dependabot/fetch-metadata@v1
+
+      - name: Merge Pull Request
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.pulls.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: (await github.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                head: 'dev',
+                base: 'test'
+              })).data[0].number,
+              merge_method: 'squash'
+            });
