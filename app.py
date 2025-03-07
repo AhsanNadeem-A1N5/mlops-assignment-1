@@ -5,7 +5,7 @@ import numpy as np
 
 app = Flask(__name__)
 
-# Load the Iris dataset#
+# Load the Iris dataset##
 iris = load_iris()
 X = iris.data  # Feature matrix
 y = iris.target  # Target labels
