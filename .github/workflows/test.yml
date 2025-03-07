@@ -1,0 +1,53 @@
+name: Test and Merge
+
+on:
+  push:
+    branches:
+      - test
+
+jobs:
+  run-tests:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run Tests
+        run: python test.py
+
+  merge-to-master:
+    name: Merge Test to Master
+    runs-on: ubuntu-latest
+    needs: run-tests
+    if: success()
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Ensure Latest Master
+        run: |
+          git fetch origin master
+          git checkout master
+          git pull origin master
+
+      - name: Merge Test into Master (Resolve Conflicts)
+        run: |
+          git merge test -X theirs || (echo "❌ Merge conflict occurred, but resolved using 'theirs' strategy." && git commit -am "Resolved conflicts using 'theirs' strategy")
+          git push origin master

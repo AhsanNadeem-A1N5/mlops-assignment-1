@@ -1,13 +1,16 @@
-name: Test and Merge
+name: CI/CD Pipeline 
 
 on:
   push:
     branches:
-      - test
+      - dev
+  pull_request:
+    branches:
+      - dev
 
 jobs:
-  run-tests:
-    name: Run Tests
+  flake8-lint:
+    name: Run Flake8
     runs-on: ubuntu-latest
 
     steps:
@@ -19,58 +22,64 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Dependencies
-        run: |
-          pip install -r requirements.txt
+      - name: Install Flake8
+        run: pip install flake8
 
-      - name: Run Tests
-        run: python test.py
+      - name: Run Flake8
+        run: flake8 .
 
   create-pr:
-    name: Create Pull Request
+    needs: flake8-lint
     runs-on: ubuntu-latest
-    needs: run-tests
-    if: success()
+    if: success()  # Only proceed if Flake8 passes
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Create Pull Request
+      - name: Create Pull Request if it doesn't exist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_EXISTS=$(gh pr list --base master --head test --json number --jq 'length')
+          PR_EXISTS=$(gh pr list --base test --head dev --json number --jq 'length')
           if [[ "$PR_EXISTS" -eq 0 ]]; then
-            gh pr create --base master --head test --title "Merge test into master" --body "Automatically generated PR to merge test into master after successful tests."
+            gh pr create --base test --head dev --title "Merge dev into test" --body "Automatically generated PR to merge dev into test after passing Flake8 checks."
+          else
+            echo "PR already exists."
           fi
 
-  merge-to-master:
-    name: Merge Test to Master
-    runs-on: ubuntu-latest
+  merge-pr:
     needs: create-pr
-    if: success()
+    runs-on: ubuntu-latest
+    if: success()  # Only merge if PR creation succeeded
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Configure Git
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Merge Pull Request
+      - name: Check PR Mergeability and Merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_NUMBER=$(gh pr list --base master --head test --json number --jq '.[0].number')
+          PR_NUMBER=$(gh pr list --base test --head dev --json number --jq '.[0].number')
           if [[ -n "$PR_NUMBER" ]]; then
-            gh pr merge "$PR_NUMBER" --squash --auto || (
-              echo "⚠️ Merge conflict detected, resolving using 'theirs' strategy" &&
-              git fetch origin master &&
-              git checkout master &&
-              git merge test -X theirs &&
-              git push origin master
-            )
+            MERGEABLE=$(gh pr view "$PR_NUMBER" --json mergeable --jq '.mergeable')
+            echo "Mergeable status: $MERGEABLE"
+            if [[ "$MERGEABLE" == "MERGEABLE" ]]; then
+              gh pr merge "$PR_NUMBER" --squash --auto
+            else
+              echo "⚠️ Merge conflict detected. Resolving automatically by preferring incoming changes (dev)."
+
+              # Checkout the test branch and merge with --strategy-option=theirs (preferring incoming changes)
+              git config --global user.email "github-actions@github.com"
+              git config --global user.name "GitHub Actions"
+              git checkout test
+              git merge --strategy=recursive -X theirs dev
+
+              # Push the resolved merge back to test
+              git push origin test
+              
+              # Mark the PR as merged
+              gh pr close "$PR_NUMBER" --comment "Merged automatically with incoming changes from dev."
+            fi
           fi
