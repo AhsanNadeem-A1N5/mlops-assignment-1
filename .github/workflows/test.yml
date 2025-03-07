@@ -1,17 +1,13 @@
-name: Test and Auto Merge
+name: Test and Merge
 
 on:
   push:
     branches:
       - test
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   run-tests:
-    name: Run Pytest on Test Branch
+    name: Run Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -26,95 +22,39 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest
+          pip install pytest  
 
       - name: Run Pytest
-        run: pytest test.py
+        run: pytest test.py  # Runs test.py with pytest
 
-  create-pr:
-    name: Create Pull Request
+  merge-to-master:
+    name: Merge Test to Master
+    runs-on: ubuntu-latest
     needs: run-tests
-    runs-on: ubuntu-latest
     if: success()
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Create Pull Request if Not Exists
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure Git
         run: |
-          PR_EXISTS=$(gh pr list --base master --head test --json number --jq 'length')
-          if [[ "$PR_EXISTS" -eq 0 ]]; then
-            gh pr create --base master --head test --title "Merge test into master" --body "Auto-generated PR after passing tests."
-          else
-            echo "PR already exists."
-          fi
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-  merge-pr:
-    name: Merge Pull Request
-    needs: create-pr
-    runs-on: ubuntu-latest
-    if: success()
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Ensure Test Branch Exists and Fetch Latest Changes
+      - name: Ensure Latest Master
         run: |
-          git fetch --all
-          if git show-ref --verify --quiet refs/remotes/origin/test; then
-            git checkout test
-            git pull origin test
-          else
-            echo "❌ Test branch not found. Exiting."
-            exit 1
-          fi
-
-      - name: Check PR Mergeability
-        id: check_merge
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_NUMBER=$(gh pr list --base master --head test --json number --jq '.[0].number')
-          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
-
-          if [[ -z "$PR_NUMBER" ]]; then
-            echo "No open PR found. Exiting."
-            exit 1
-          fi
-
-          MERGEABLE=$(gh pr view "$PR_NUMBER" --json mergeable --jq '.mergeable')
-          echo "Mergeable status: $MERGEABLE"
-          echo "MERGEABLE=$MERGEABLE" >> $GITHUB_ENV
-
-      - name: Merge PR Automatically
-        if: env.MERGEABLE == 'MERGEABLE'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr merge "$PR_NUMBER" --squash --auto
-
-      - name: Resolve Merge Conflicts and Force Merge
-        if: env.MERGEABLE != 'MERGEABLE'
-        run: |
-          echo "⚠️ Merge conflict detected. Resolving automatically by preferring test branch."
-          
-          git config --global user.email "github-actions@github.com"
-          git config --global user.name "GitHub Actions"
-
-          git checkout master || git checkout -b master origin/master
+          git fetch origin master
+          git checkout master
           git pull origin master
 
-          # Force merge by preferring test's changes
+      - name: Merge Test into Master (Resolve Conflicts)
+        run: |
           git merge --strategy=recursive -X theirs test || (
-            echo "✅ Merge conflicts resolved by preferring test branch."
+            echo "❌ Merge conflict occurred, resolving automatically using 'theirs' strategy."
             git add .
-            git commit -m "Resolved merge conflicts by preferring test branch."
+            git commit -m "Resolved merge conflicts by preferring incoming changes from test"
           )
 
-          git push origin master --force
-
-          gh pr close "$PR_NUMBER" --comment "Merged automatically by resolving conflicts in favor of test branch."
+      - name: Push Merged Changes
+        run: git push origin master
